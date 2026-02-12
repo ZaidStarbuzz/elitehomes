@@ -1,0 +1,385 @@
+// Prisma Schema for EliteHomes - Multi-Tenant Hostel Management System
+// Strategy: Shared database with tenant_id (hostelId) column for isolation
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  SUPER_ADMIN
+  HOSTEL_ADMIN
+  STAFF
+  GUEST
+}
+
+enum RoomType {
+  SINGLE
+  DOUBLE
+  TRIPLE
+  QUAD
+  DORMITORY
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  RESERVED
+}
+
+enum BedStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  MAINTENANCE
+}
+
+enum BookingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum ComplaintPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ComplaintCategory {
+  MAINTENANCE
+  CLEANLINESS
+  NOISE
+  SECURITY
+  FOOD
+  PLUMBING
+  ELECTRICAL
+  OTHER
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionCategory {
+  ROOM_FEE
+  DEPOSIT
+  SALARY
+  UTILITIES
+  MAINTENANCE_COST
+  SUPPLIES
+  FOOD
+  MISCELLANEOUS
+  REFUND
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum EmployeeRole {
+  WARDEN
+  CLEANING_STAFF
+  COOK
+  MAINTENANCE_STAFF
+  SECURITY
+  RECEPTIONIST
+  MANAGER
+  OTHER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+// ============================================================
+// MODELS
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  supabaseId    String    @unique @map("supabase_id")
+  email         String    @unique
+  name          String
+  phone         String?
+  avatar        String?
+  role          UserRole  @default(GUEST)
+  gender        Gender?
+  dateOfBirth   DateTime? @map("date_of_birth")
+  address       String?
+  city          String?
+  state         String?
+  country       String?
+  zipCode       String?   @map("zip_code")
+  idType        String?   @map("id_type")
+  idNumber      String?   @map("id_number")
+  isVerified    Boolean   @default(false) @map("is_verified")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  adminHostels  Hostel[]        @relation("HostelAdmin")
+  bookings      Booking[]
+  complaints    Complaint[]     @relation("ComplaintAuthor")
+  assignedComplaints Complaint[] @relation("ComplaintAssignee")
+  employees     Employee[]
+  hostelMembers HostelMember[]
+
+  @@map("users")
+}
+
+model Hostel {
+  id            String    @id @default(cuid())
+  name          String
+  slug          String    @unique
+  description   String?
+  address       String
+  city          String
+  state         String
+  country       String    @default("India")
+  zipCode       String?   @map("zip_code")
+  phone         String?
+  email         String?
+  website       String?
+  logo          String?
+  coverImage    String?   @map("cover_image")
+  amenities     String[]  @default([])
+  rules         String[]  @default([])
+  gender        Gender?
+  totalCapacity Int       @default(0) @map("total_capacity")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  adminId       String    @map("admin_id")
+  admin         User      @relation("HostelAdmin", fields: [adminId], references: [id])
+  floors        Floor[]
+  rooms         Room[]
+  beds          Bed[]
+  bookings      Booking[]
+  complaints    Complaint[]
+  employees     Employee[]
+  transactions  Transaction[]
+  announcements Announcement[]
+  members       HostelMember[]
+
+  @@map("hostels")
+}
+
+model HostelMember {
+  id        String    @id @default(cuid())
+  hostelId  String    @map("hostel_id")
+  userId    String    @map("user_id")
+  role      UserRole
+  isActive  Boolean   @default(true) @map("is_active")
+  joinedAt  DateTime  @default(now()) @map("joined_at")
+
+  hostel    Hostel    @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([hostelId, userId])
+  @@map("hostel_members")
+}
+
+model Floor {
+  id          String    @id @default(cuid())
+  name        String
+  floorNumber Int       @map("floor_number")
+  description String?
+  hostelId    String    @map("hostel_id")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  hostel      Hostel    @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  rooms       Room[]
+
+  @@unique([hostelId, floorNumber])
+  @@map("floors")
+}
+
+model Room {
+  id          String     @id @default(cuid())
+  roomNumber  String     @map("room_number")
+  name        String?
+  type        RoomType   @default(DOUBLE)
+  capacity    Int        @default(2)
+  monthlyRent Decimal    @default(0) @map("monthly_rent") @db.Decimal(10, 2)
+  deposit     Decimal    @default(0) @db.Decimal(10, 2)
+  status      RoomStatus @default(AVAILABLE)
+  amenities   String[]   @default([])
+  description String?
+  hostelId    String     @map("hostel_id")
+  floorId     String     @map("floor_id")
+  isActive    Boolean    @default(true) @map("is_active")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  hostel      Hostel     @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  floor       Floor      @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  beds        Bed[]
+
+  @@unique([hostelId, roomNumber])
+  @@map("rooms")
+}
+
+model Bed {
+  id          String    @id @default(cuid())
+  bedNumber   String    @map("bed_number")
+  status      BedStatus @default(AVAILABLE)
+  monthlyRent Decimal?  @map("monthly_rent") @db.Decimal(10, 2)
+  hostelId    String    @map("hostel_id")
+  roomId      String    @map("room_id")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  hostel      Hostel    @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  room        Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  bookings    Booking[]
+
+  @@unique([roomId, bedNumber])
+  @@map("beds")
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  bookingNumber String        @unique @map("booking_number")
+  status        BookingStatus @default(PENDING)
+  checkInDate   DateTime?     @map("check_in_date")
+  checkOutDate  DateTime?     @map("check_out_date")
+  actualCheckIn DateTime?     @map("actual_check_in")
+  actualCheckOut DateTime?    @map("actual_check_out")
+  monthlyRent   Decimal       @map("monthly_rent") @db.Decimal(10, 2)
+  deposit       Decimal       @default(0) @db.Decimal(10, 2)
+  totalPaid     Decimal       @default(0) @map("total_paid") @db.Decimal(10, 2)
+  notes         String?
+  hostelId      String        @map("hostel_id")
+  guestId       String        @map("guest_id")
+  bedId         String?       @map("bed_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  hostel        Hostel        @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  guest         User          @relation(fields: [guestId], references: [id])
+  bed           Bed?          @relation(fields: [bedId], references: [id])
+  transactions  Transaction[]
+
+  @@map("bookings")
+}
+
+model Complaint {
+  id            String            @id @default(cuid())
+  ticketNumber  String            @unique @map("ticket_number")
+  title         String
+  description   String
+  category      ComplaintCategory @default(OTHER)
+  priority      ComplaintPriority @default(MEDIUM)
+  status        ComplaintStatus   @default(OPEN)
+  resolution    String?
+  images        String[]          @default([])
+  hostelId      String            @map("hostel_id")
+  authorId      String            @map("author_id")
+  assigneeId    String?           @map("assignee_id")
+  resolvedAt    DateTime?         @map("resolved_at")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  hostel        Hostel            @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  author        User              @relation("ComplaintAuthor", fields: [authorId], references: [id])
+  assignee      User?             @relation("ComplaintAssignee", fields: [assigneeId], references: [id])
+
+  @@map("complaints")
+}
+
+model Employee {
+  id            String       @id @default(cuid())
+  employeeRole  EmployeeRole @map("employee_role")
+  salary        Decimal      @default(0) @db.Decimal(10, 2)
+  joiningDate   DateTime     @default(now()) @map("joining_date")
+  department    String?
+  isActive      Boolean      @default(true) @map("is_active")
+  hostelId      String       @map("hostel_id")
+  userId        String       @map("user_id")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  hostel        Hostel       @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id])
+
+  @@unique([hostelId, userId])
+  @@map("employees")
+}
+
+model Transaction {
+  id            String              @id @default(cuid())
+  type          TransactionType
+  category      TransactionCategory
+  amount        Decimal             @db.Decimal(10, 2)
+  description   String?
+  paymentStatus PaymentStatus       @default(PENDING) @map("payment_status")
+  paymentMethod String?             @map("payment_method")
+  referenceId   String?             @map("reference_id")
+  hostelId      String              @map("hostel_id")
+  bookingId     String?             @map("booking_id")
+  date          DateTime            @default(now())
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  hostel        Hostel              @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+  booking       Booking?            @relation(fields: [bookingId], references: [id])
+
+  @@map("transactions")
+}
+
+model Announcement {
+  id          String    @id @default(cuid())
+  title       String
+  content     String
+  isPublished Boolean   @default(false) @map("is_published")
+  publishedAt DateTime? @map("published_at")
+  hostelId    String    @map("hostel_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  hostel      Hostel    @relation(fields: [hostelId], references: [id], onDelete: Cascade)
+
+  @@map("announcements")
+}
