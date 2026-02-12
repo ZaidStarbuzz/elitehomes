@@ -5,28 +5,35 @@ import type { SessionUser } from "@/types";
 import type { UserRole } from "@prisma/client";
 
 export async function getSession(): Promise<SessionUser | null> {
-  const supabase = await createClient();
-  const {
-    data: { user: supabaseUser },
-  } = await supabase.auth.getUser();
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user: supabaseUser },
+    } = await supabase.auth.getUser();
 
-  console.log(supabaseUser, "supabaseUser");
-  if (!supabaseUser) return null;
+    // console.log(supabaseUser, "supabaseUser");
+    if (!supabaseUser) return null;
 
-  const user = await db.user.findUnique({
-    where: { supabaseId: supabaseUser.id },
-    select: {
-      id: true,
-      supabaseId: true,
-      email: true,
-      name: true,
-      role: true,
-      avatar: true,
-    },
-  });
-  console.log(user);
+    const user = await db.user.findUnique({
+      where: { supabaseId: supabaseUser.id },
+      select: {
+        id: true,
+        supabaseId: true,
+        email: true,
+        name: true,
+        role: true,
+        avatar: true,
+      },
+    });
+    // console.log(user);
 
-  return user;
+    return user;
+  } catch (error) {
+    console.error("Error in getSession:", error);
+    // In production, you might want to return null or throw depending on severity
+    // For now, logging is key to finding the cause.
+    return null;
+  }
 }
 
 export async function requireAuth(): Promise<SessionUser> {
