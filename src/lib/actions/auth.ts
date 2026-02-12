@@ -51,11 +51,11 @@ export async function register(formData: FormData) {
       data: {
         name: parsed.data.name,
       },
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      // emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
     },
   });
 
-  console.log("first", authData, authError)
+  console.log("first", authData, authError);
 
   if (authError) {
     return { error: authError.message };
